@@ -1,293 +1,166 @@
 ---
 name: nano-banana
-description: 使用 Google Nano Banana（Gemini 图像生成 API）生成或编辑图片。当用户说"生成图片"、"画一张"、"帮我做张图"、"图片编辑"、"把这张图改成"、"nano banana"、"nanobanana"、"香蕉"图像生成相关需求时，自动触发此 skill。即使用户没有明确提到 Nano Banana，只要涉及 AI 图片生成或编辑，也应主动使用此 skill。
+description: Generate or edit images using Google Nano Banana (Gemini image generation API). Trigger this skill whenever the user asks to generate an image, draw something, create artwork, edit a photo, or mentions "nano banana", "nanobanana", or any AI image generation/editing need — even if they don't explicitly mention Nano Banana. Proactively use this skill for any image creation or transformation request.
 ---
 
-# Nano Banana 图片生成 Skill
+# Nano Banana — Image Generation Skill
 
-基于 Google Gemini 图像生成 API（即 Nano Banana），在本地用 Python 生成或编辑图片。
+Generate or edit images locally using the Google Gemini image generation API (a.k.a. Nano Banana).
 
-## 快速流程
+## Quick Workflow
 
-1. 检查环境（API Key + 依赖）
-2. 根据需求选择模式（文生图 / 图片编辑 / 多图混合）
-3. 选择合适的模型
-4. **直接使用 skill 内置脚本**，无需重新编写
-5. 运行脚本，保存结果到 `/var/minis/attachments/`
-6. 在对话中内联展示图片
+1. Check environment (API key + dependencies)
+2. Identify the mode: text-to-image / image editing / batch generation
+3. Choose the right model
+4. **Use the bundled scripts directly** — no need to rewrite them
+5. Run the script and save output to `/var/minis/attachments/`
+6. Display the result inline in the conversation
 
 ---
 
-## 环境准备
+## Environment Setup
 
-### 检查 API Key
+### Check API Key
 ```bash
 source /etc/profile && echo $GEMINI_API_KEY | head -c 10
 ```
 
-> ⚠️ **必须用 `source /etc/profile`**，否则环境变量不生效。Key 存储在 `/etc/profile` 中的 `GEMINI_API_KEY`。
+> ⚠️ Always run `source /etc/profile` first — environment variables are stored there and won't be available otherwise.
 
-如未设置，引导用户在 [Google AI Studio](https://aistudio.google.com/apikey) 获取，然后：
+If not set, direct the user to [Google AI Studio](https://aistudio.google.com/apikey) to obtain a key, then:
 ```bash
 echo 'export GEMINI_API_KEY="your_key_here"' >> /etc/profile
 ```
 
-### 检查依赖
+### Check Dependencies
 ```bash
 pip show google-genai pillow 2>&1 | grep -E "^Name|not found"
 ```
 
-如未安装：
+If missing:
 ```bash
 pip install google-genai pillow
 ```
 
 ---
 
-## 模型选择
+## Model Selection
 
-| 模型 | 模型 ID | 适用场景 |
-|------|---------|---------|
-| **Nano Banana 2**（推荐首选） | `gemini-3.1-flash-image-preview` | 速度快、质量好、支持 2K，日常首选 |
-| **Nano Banana Pro** | `gemini-3-pro-image-preview` | 专业资产、复杂指令、高保真文字渲染 |
-| **Nano Banana（原版）** | `gemini-2.5-flash-image` | 极速低延迟，简单任务 |
+| Model | Model ID | Best For |
+|-------|----------|----------|
+| **Nano Banana 2** (recommended) | `gemini-3.1-flash-image-preview` | Fast, high quality, 2K support — default choice |
+| **Nano Banana Pro** | `gemini-3-pro-image-preview` | Complex prompts, professional assets, precise text rendering |
+| **Nano Banana (original)** | `gemini-2.5-flash-image` | Ultra-low latency, simple tasks |
 
-**默认使用 `gemini-3.1-flash-image-preview`**，除非用户明确要求其他版本。
+**Default to `gemini-3.1-flash-image-preview`** unless the user explicitly requests another version.
 
 ---
 
-## ⚠️ 已知 API 陷阱（必读）
+## ⚠️ Known API Pitfalls
 
-### 1. 宽高比 / 分辨率配置
+### 1. Aspect ratio / resolution config
 
-❌ **错误写法**（旧版，会报 `AttributeError`）：
+❌ **Wrong** (old API, throws `AttributeError`):
 ```python
-# types.ImageGenerationConfig 不存在！
+# types.ImageGenerationConfig does not exist!
 image_generation_config=types.ImageGenerationConfig(aspect_ratio="16:9")
 ```
 
-✅ **正确写法**：
+✅ **Correct**:
 ```python
-# 使用 image_config=types.ImageConfig(...)
 config=types.GenerateContentConfig(
     response_modalities=["IMAGE"],
     image_config=types.ImageConfig(
-        aspect_ratio="16:9",  # 可选: 1:1, 4:3, 3:4, 16:9, 9:16
-        image_size="2K",      # 可选: 1K, 2K（默认 1K）
+        aspect_ratio="16:9",  # options: 1:1, 4:3, 3:4, 16:9, 9:16
+        image_size="2K",      # options: 1K, 2K (default: 1K)
     ),
 )
 ```
 
-### 2. 环境变量加载
+### 2. Environment variable loading
 
-❌ 直接 `python3 script.py` 可能读不到 Key  
-✅ 始终用 `source /etc/profile && python3 script.py`
+❌ Running `python3 script.py` directly may not have the API key  
+✅ Always prefix with `source /etc/profile && python3 script.py`
 
-### 3. 图片保存
+### 3. Saving images
 
-使用 `part.as_image()` 返回 PIL Image 对象，直接 `.save(path)` 即可。无需手动处理 base64。
-
----
-
-## 内置脚本
-
-> 直接复制使用，无需重新编写。所有脚本运行方式：
-> ```bash
-> source /etc/profile && python3 <skill-path>/nano-banana/scripts/<script>.py [args]
-> ```
+`part.as_image()` returns a PIL Image object — call `.save(path)` directly. No need to handle base64 manually.
 
 ---
 
-### 📄 `gen.py` — 文生图（主力脚本）
+## Bundled Scripts
 
-```python
-#!/usr/bin/env python3
-"""
-Nano Banana 文生图脚本
-用法: python3 gen.py "prompt内容" [输出路径] [宽高比] [分辨率]
-示例: python3 gen.py "一只熊猫在竹林喝茶" /var/minis/attachments/out.png 1:1 2K
-"""
-import os, sys
-from google import genai
-from google.genai import types
-
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-
-prompt      = sys.argv[1] if len(sys.argv) > 1 else "a beautiful landscape"
-output_path = sys.argv[2] if len(sys.argv) > 2 else "/var/minis/attachments/output.png"
-aspect      = sys.argv[3] if len(sys.argv) > 3 else "1:1"
-size        = sys.argv[4] if len(sys.argv) > 4 else "1K"
-
-print(f"Generating: {prompt[:60]}...")
-print(f"Output: {output_path} | {aspect} | {size}")
-
-response = client.models.generate_content(
-    model="gemini-3.1-flash-image-preview",
-    contents=[prompt],
-    config=types.GenerateContentConfig(
-        response_modalities=["IMAGE"],
-        image_config=types.ImageConfig(
-            aspect_ratio=aspect,
-            image_size=size,
-        ),
-    ),
-)
-
-saved = False
-for part in response.candidates[0].content.parts:
-    if part.inline_data is not None:
-        part.as_image().save(output_path)
-        print(f"✅ Saved: {output_path}")
-        saved = True
-    elif hasattr(part, "text") and part.text:
-        print(f"ℹ️  Model: {part.text}")
-
-if not saved:
-    print("❌ No image returned. Try rephrasing the prompt.")
-    sys.exit(1)
+Run any script with:
+```bash
+source /etc/profile && python3 <skill-path>/nano-banana/scripts/<script>.py [args]
 ```
 
 ---
 
-### 📄 `edit.py` — 图片编辑（图 + 文 → 图）
+### 📄 `gen.py` — Text to Image
 
-```python
-#!/usr/bin/env python3
-"""
-Nano Banana 图片编辑脚本
-用法: python3 edit.py <输入图片路径> "编辑指令" [输出路径]
-示例: python3 edit.py /var/minis/attachments/photo.jpg "给猫加一顶巫师帽" /var/minis/attachments/edited.png
-"""
-import os, sys, base64
-from google import genai
-from google.genai import types
-
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-
-if len(sys.argv) < 3:
-    print("Usage: edit.py <input_image> <prompt> [output_path]")
-    sys.exit(1)
-
-input_path  = sys.argv[1]
-edit_prompt = sys.argv[2]
-output_path = sys.argv[3] if len(sys.argv) > 3 else "/var/minis/attachments/edited.png"
-
-ext = input_path.lower().rsplit(".", 1)[-1]
-mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
-mime_type = mime_map.get(ext, "image/jpeg")
-
-with open(input_path, "rb") as f:
-    image_bytes = f.read()
-
-print(f"Editing: {input_path}")
-print(f"Instruction: {edit_prompt[:60]}...")
-
-response = client.models.generate_content(
-    model="gemini-3.1-flash-image-preview",
-    contents=[
-        types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-        edit_prompt,
-    ],
-    config=types.GenerateContentConfig(
-        response_modalities=["IMAGE", "TEXT"],
-    ),
-)
-
-for part in response.candidates[0].content.parts:
-    if part.inline_data is not None:
-        part.as_image().save(output_path)
-        print(f"✅ Saved: {output_path}")
-    elif hasattr(part, "text") and part.text:
-        print(f"ℹ️  Model: {part.text}")
+```
+Usage:  gen.py "prompt" [output_path] [aspect_ratio] [resolution]
+Example: gen.py "a panda drinking tea in a bamboo forest" /var/minis/attachments/out.png 1:1 2K
 ```
 
 ---
 
-### 📄 `batch.py` — 批量生图（多 prompt → 多图）
+### 📄 `edit.py` — Image Editing (image + prompt → image)
 
-```python
-#!/usr/bin/env python3
-"""
-Nano Banana 批量生图脚本
-用法: python3 batch.py  (直接编辑脚本底部的 TASKS 列表)
-"""
-import os
-from google import genai
-from google.genai import types
-
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-
-# ✏️ 编辑此处定义批量任务
-TASKS = [
-    {"prompt": "a futuristic city at night", "file": "/var/minis/attachments/batch_1.png", "aspect": "16:9"},
-    {"prompt": "a cozy coffee shop interior", "file": "/var/minis/attachments/batch_2.png", "aspect": "1:1"},
-]
-
-for i, task in enumerate(TASKS):
-    print(f"[{i+1}/{len(TASKS)}] {task['file']}")
-    response = client.models.generate_content(
-        model="gemini-3.1-flash-image-preview",
-        contents=[task["prompt"]],
-        config=types.GenerateContentConfig(
-            response_modalities=["IMAGE"],
-            image_config=types.ImageConfig(
-                aspect_ratio=task.get("aspect", "1:1"),
-                image_size=task.get("size", "1K"),
-            ),
-        ),
-    )
-    for part in response.candidates[0].content.parts:
-        if part.inline_data is not None:
-            part.as_image().save(task["file"])
-            print(f"  ✅ Saved")
-        elif hasattr(part, "text") and part.text:
-            print(f"  ℹ️  {part.text}")
-
-print("All done!")
+```
+Usage:   edit.py <input_image> "edit instruction" [output_path]
+Example: edit.py /var/minis/attachments/photo.jpg "add a wizard hat to the cat" /var/minis/attachments/edited.png
 ```
 
 ---
 
-## 实际操作步骤
+### 📄 `batch.py` — Batch Generation (multiple prompts → multiple images)
 
-当用户发出图片生成请求时：
-
-1. **理解需求** — 判断是文生图、图片编辑还是批量生图
-2. **检查 API Key** — `source /etc/profile && echo $GEMINI_API_KEY | head -c 10`
-3. **检查脚本是否存在** — `ls <skill-path>/nano-banana/scripts/`
-4. **若脚本不存在**，用 `file_write` 将上方对应脚本写入 skill 目录
-5. **执行**：
-   - 文生图：`source /etc/profile && python3 <skill-path>/nano-banana/scripts/gen.py "prompt" /var/minis/attachments/out.png 16:9 2K`
-   - 图片编辑：`source /etc/profile && python3 <skill-path>/nano-banana/scripts/edit.py <图片路径> "指令" /var/minis/attachments/out.png`
-   - 批量：编辑 `scripts/batch.py` 中的 TASKS，再运行
-6. **展示结果** — `![描述](minis://attachments/out.png)`
+Edit the `TASKS` list at the top of the script, then run it.
 
 ---
 
-## Prompt 写作技巧
+## Step-by-Step
 
-- **写场景描述，不要堆关键词** — "一位老年日本陶艺家在工作室专注拉坯，窗外透进柔和午后阳光，照片级写实风格" 优于 "日本 陶艺 老人 写实"
-- **明确风格** — 摄影风格加相机参数（"50mm 定焦镜头，浅景深"）；插画风格说明画风（"吉卜力风格水彩"）
-- **图中文字** — 明确说明要显示的文字内容，文字渲染效果更好
-- **迭代修改** — 用 `edit.py` 在已有图上小幅调整，比重新生成效率更高
-- **宽高比选择** — 社交媒体配图用 `16:9`，头像/封面用 `1:1`，手机壁纸用 `9:16`
+When the user makes an image generation request:
 
----
-
-## 常见问题
-
-| 问题 | 原因 & 解决方案 |
-|------|----------------|
-| `AttributeError: ImageGenerationConfig` | 旧写法已废弃，改用 `image_config=types.ImageConfig(...)` |
-| `KeyError: GEMINI_API_KEY` | 先执行 `source /etc/profile`，再运行脚本 |
-| 图片未生成，只有文字 | 确认 `response_modalities` 包含 `"IMAGE"` |
-| 图片质量不佳 | 换用 `gemini-3-pro-image-preview`，或优化 prompt |
-| 速率限制错误 | 免费套餐有限制，稍等片刻重试 |
-| 图片保存失败 | 确认 `/var/minis/attachments/` 目录存在 |
+1. **Understand the request** — text-to-image, image editing, or batch?
+2. **Check API key** — `source /etc/profile && echo $GEMINI_API_KEY | head -c 10`
+3. **Verify scripts exist** — `ls <skill-path>/nano-banana/scripts/`
+4. **If scripts are missing**, use `file_write` to recreate them from the source in this skill
+5. **Run the appropriate script**:
+   - Text-to-image: `source /etc/profile && python3 <skill-path>/nano-banana/scripts/gen.py "prompt" /var/minis/attachments/out.png 16:9 2K`
+   - Image editing: `source /etc/profile && python3 <skill-path>/nano-banana/scripts/edit.py <image_path> "instruction" /var/minis/attachments/out.png`
+   - Batch: edit `TASKS` in `scripts/batch.py`, then run it
+6. **Display the result** — `![description](minis://attachments/out.png)`
 
 ---
 
-## 参考资源
+## Prompt Tips
 
-- 官方文档：https://ai.google.dev/gemini-api/docs/image-generation
-- API Key 获取：https://aistudio.google.com/apikey
+- **Describe a scene, don't just stack keywords** — "An elderly Japanese potter focused at the wheel, soft afternoon light through a studio window, photorealistic" beats "Japan pottery old man realistic"
+- **Specify style explicitly** — for photography add camera details ("50mm lens, shallow depth of field"); for illustration name the style ("Ghibli-style watercolor")
+- **Text in images** — spell out exactly what text should appear; the model renders it more accurately when it's explicit
+- **Iterate with edit.py** — make small adjustments on an existing image rather than regenerating from scratch
+- **Aspect ratio guide** — `16:9` for banners/social media, `1:1` for avatars/covers, `9:16` for phone wallpapers, `3:4` for portrait cards
+
+---
+
+## Troubleshooting
+
+| Issue | Cause & Fix |
+|-------|-------------|
+| `AttributeError: ImageGenerationConfig` | Deprecated API — use `image_config=types.ImageConfig(...)` instead |
+| `KeyError: GEMINI_API_KEY` | Run `source /etc/profile` before executing the script |
+| Only text returned, no image | Ensure `response_modalities` includes `"IMAGE"` |
+| Poor image quality | Switch to `gemini-3-pro-image-preview` or refine the prompt |
+| Rate limit error | Free tier has limits — wait a moment and retry |
+| Save fails | Confirm `/var/minis/attachments/` directory exists |
+
+---
+
+## References
+
+- Official docs: https://ai.google.dev/gemini-api/docs/image-generation
+- Get an API key: https://aistudio.google.com/apikey

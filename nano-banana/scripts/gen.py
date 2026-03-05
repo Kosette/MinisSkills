@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Nano Banana 文生图脚本
-用法: python3 gen.py "prompt内容" [输出路径] [宽高比] [分辨率]
-示例: python3 gen.py "一只熊猫在竹林喝茶" /var/minis/attachments/out.png 1:1 2K
-宽高比: 1:1, 4:3, 3:4, 16:9, 9:16
-分辨率: 1K, 2K
+Nano Banana — Text to Image
+Usage:   python3 gen.py "prompt" [output_path] [aspect_ratio] [resolution]
+Example: python3 gen.py "a panda drinking tea in a bamboo forest" /var/minis/attachments/out.png 1:1 2K
+
+Aspect ratios: 1:1, 4:3, 3:4, 16:9, 9:16
+Resolutions:   1K, 2K
 """
 import os, sys
 from google import genai

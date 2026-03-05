@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Nano Banana 图片编辑脚本
-用法: python3 edit.py <输入图片路径> "编辑指令" [输出路径]
-示例: python3 edit.py /var/minis/attachments/photo.jpg "给猫加一顶巫师帽" /var/minis/attachments/edited.png
+Nano Banana — Image Editing (image + prompt → image)
+Usage:   python3 edit.py <input_image> "edit instruction" [output_path]
+Example: python3 edit.py /var/minis/attachments/photo.jpg "add a wizard hat to the cat" /var/minis/attachments/edited.png
 """
 import os, sys
 from google import genai
