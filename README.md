@@ -207,8 +207,7 @@ description: >
   (Deep/REM/Core/Awake), blood oxygen (SpO2), sleep duration trends, and
   bedtime patterns. Use this skill whenever the user asks about sleep quality,
   sleep analysis, sleep stages, blood oxygen during sleep, or any Apple Watch
-  sleep data — even if they don't use the word "analysis". Also trigger for
-  "睡眠分析", "血氧", "深睡眠", "REM睡眠".
+  sleep data — even if they don't use the word "analysis".
 ---
 
 # Sleep Health Analysis
