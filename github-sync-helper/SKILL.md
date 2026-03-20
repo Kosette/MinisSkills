@@ -1,0 +1,114 @@
+---
+name: github-sync-helper
+description: >
+  通用 GitHub 基础操作 + 同步/PR 自动化技能（Minis 环境）。当用户提到“GitHub 怎么用、clone、init、remote、branch、commit、push、pull、fetch、merge、rebase、tag、release、stash、submodule、fork、PR、同步到上游(upstream)、删除分支、清空目录后恢复、直推 main、一键同步”等任意 Git/GitHub 基础操作与工作流时，必须触发本技能。
+compatibility: >
+  Requires git, python3. Uses env GITHUB_TOKEN for GitHub API + HTTPS push (non-interactive via GIT_ASKPASS).
+---
+
+## 目标
+
+把 GitHub/Git 的“基础操作”与常见协作流程固化为：
+
+1) 清晰的命令速查（解释 + 何时用）
+2) 可执行的一键脚本（避免重复手工步骤）
+
+## 安全与约束（必须遵守）
+
+| 序号 | 规则 | 原因 |
+|---:|---|---|
+| 1 | **不要输出 Token**：任何命令都不得把 `$GITHUB_TOKEN` echo/print 到 stdout | 防止泄露 |
+| 2 | **危险操作二次确认**：删分支、清空目录、强制覆盖、强推、直推 main | 可逆性差 |
+| 3 | 默认用“分支 + PR”协作；只有用户明确要求才“直推 main” | 降低对主分支破坏 |
+| 4 | push/pull 前先 `git status` | 防止误提交/误覆盖 |
+
+## 运行方式
+
+- **脚本入口**：`sh /var/minis/skills/github-sync-helper/scripts/gh_sync.sh <command> [options]`
+
+> 脚本在“当前 git 仓库目录”下运行（必须在仓库内）。
+
+## Git/GitHub 基础操作速查（解释 + 对应脚本）
+
+| 序号 | 类别 | 操作 | 一句话解释 | 常用命令 | 脚本支持 |
+|---:|---|---|---|---|---|
+| 1 | 初始化 | init | 把当前目录变成 git 仓库 | `git init` | `init` |
+| 2 | 获取代码 | clone | 从远端下载仓库到本地 | `git clone <url>` | `clone` |
+| 3 | 远端 | remote | 管理 origin/upstream 等远端 | `git remote -v/add/set-url/remove` | `remotes/add-remote/add-upstream/set-remote-url/remove-remote` |
+| 4 | 分支 | branch | 查看/创建/删除分支 | `git branch -a/-d/-D` | `branches/create-branch/delete-branches` |
+| 5 | 切换 | checkout/switch | 切换到某分支 | `git switch <b>` | `checkout` |
+| 6 | 查看变更 | status/diff/log | 看工作区改动/差异/历史 | `git status` `git diff` `git log` | `status/diff/log` |
+| 7 | 暂存 | add | 把改动加入暂存区 | `git add -A` | `add` |
+| 8 | 提交 | commit | 把暂存区打包成一次提交 | `git commit -m "..."` | `commit` |
+| 9 | 同步 | fetch/pull/push | 拉取/合并/推送提交 | `git fetch` `git pull` `git push` | `fetch/pull/push/push-main` |
+|10| 合并 | merge/rebase | 合并分支历史 | `git merge` `git rebase` | `merge/rebase`（谨慎） |
+|11| 暂存栈 | stash | 临时收起未提交改动 | `git stash` | `stash` |
+|12| 标签 | tag | 给提交打版本号 | `git tag` | `tag` |
+|13| 子模块 | submodule | 管理子仓库依赖 | `git submodule` | `submodule` |
+|14| GitHub 协作 | fork/PR | fork 后在自己仓库改，提交 PR 到上游 |（网页 + API） | `pr` |
+
+> 注：脚本的定位是“把常用基础操作变成可复用命令”。遇到复杂 rebase/冲突，仍建议用交互式终端处理。
+
+## 脚本命令清单（gh_sync.sh）
+
+| 序号 | command | 作用 |
+|---:|---|---|
+| 1 | `init` | 在当前目录初始化 git 仓库 |
+| 2 | `clone --url <url> [--dir <path>]` | clone 仓库到指定目录 |
+| 3 | `remotes` | 显示当前 remotes |
+| 4 | `add-remote --name <n> --url <url>` | 添加远端 |
+| 5 | `set-remote-url --name <n> --url <url>` | 修改远端 URL |
+| 6 | `remove-remote --name <n>` | 删除远端 |
+| 7 | `add-upstream --upstream <owner/repo>` | 添加 upstream remote |
+| 8 | `status` | `git status --porcelain` + 简要提示 |
+| 9 | `diff [--staged]` | 查看差异 |
+|10| `log [--n <k>]` | 查看最近提交 |
+|11| `branches` | 列出本地与远程分支 |
+|12| `create-branch --name <b> [--from <ref>]` | 创建分支 |
+|13| `checkout --name <b>` | 切换分支 |
+|14| `delete-branches --keep <branch>` | 删除除 keep 外的本地/远程分支 |
+|15| `add --path <p>` | `git add` |
+|16| `commit --message <m>` | `git commit` |
+|17| `fetch [--remote <n>]` | 拉取远端更新 |
+|18| `pull [--remote <n>] [--branch <b>]` | 拉取并合并 |
+|19| `push [--remote <n>] [--branch <b>]` | 推送 |
+|20| `push-main` | push 当前 main 到 origin（使用 token 非交互） |
+|21| `empty-dir --dir <path>` | 清空仓库内某目录但保留目录（用 .gitkeep） |
+|22| `restore-dir --src <path> --dst <path>` | 用本机目录覆盖恢复到仓库目录（会先删除 dst 内容） |
+|23| `pr --upstream <owner/repo> --head <owner:branch> --base <branch> --title <t> --body <b>` | 通过 GitHub API 创建 PR |
+
+## 典型工作流（示例）
+
+### 1）直推 main：清空目录 → 恢复目录 → push（你刚刚那套）
+
+```bash
+sh /var/minis/skills/github-sync-helper/scripts/gh_sync.sh empty-dir --dir self-improving-agent
+sh /var/minis/skills/github-sync-helper/scripts/gh_sync.sh restore-dir --src /var/minis/skills/self-improving-agent --dst self-improving-agent
+sh /var/minis/skills/github-sync-helper/scripts/gh_sync.sh commit --message "restore(self-improving-agent): sync from local"
+sh /var/minis/skills/github-sync-helper/scripts/gh_sync.sh push-main
+```
+
+### 2）删除除 main 外的所有分支（本地+远程）
+
+```bash
+sh /var/minis/skills/github-sync-helper/scripts/gh_sync.sh delete-branches --keep main
+```
+
+### 3）不建分支，fork:main → upstream:main 直接开 PR
+
+```bash
+sh /var/minis/skills/github-sync-helper/scripts/gh_sync.sh pr \
+  --upstream OpenMinis/MinisSkills \
+  --head mowenyun:main \
+  --base main \
+  --title "sync: ..." \
+  --body "..."
+```
+
+## 故障排查
+
+| 序号 | 现象 | 处理 |
+|---:|---|---|
+| 1 | push 报 `could not read Username` | 需要 env `GITHUB_TOKEN`，脚本会用 `GIT_ASKPASS` 非交互认证 |
+| 2 | API 401/403 | token 权限不足（repo/public_repo）或过期 |
+| 3 | `not inside a git repo` | 先 `cd` 到仓库目录（或用 `clone`/`init`） |
